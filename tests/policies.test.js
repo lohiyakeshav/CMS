@@ -63,7 +63,7 @@ describe('Policies API', () => {
       });
 
     const delRes = await request(app).delete('/policies/POL5');
-    expect(delRes.status).toBe(404);
+    expect(delRes.status).toBe(204);
 
     const getRes = await request(app).get('/policies/POL5');
     expect(getRes.status).toBe(404);

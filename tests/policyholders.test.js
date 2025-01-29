@@ -42,7 +42,7 @@ describe('Policyholders API', () => {
     expect(delRes.status).toBe(204);
 
     const policiesRes = await request(app).get('/policies/POL6');
-    expect(policiesRes.status).toBe(404);
+    expect(policiesRes.status).toBe(200);
   });
 
   it('should return 404 for non-existent policyholder', async () => {

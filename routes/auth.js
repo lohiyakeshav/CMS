@@ -1,3 +1,11 @@
+/**
+ * @swagger
+ * tags:
+ *   name: Auth
+ *   description: Authentication API
+ */
+
+
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -7,6 +15,38 @@ const authenticateToken = require('../middleware/authMiddleware'); // Add this l
 const router = express.Router();
 const SECRET_KEY = process.env.JWT_SECRET;
 
+
+
+
+/**
+ * @swagger
+ * /auth/register:
+ *   post:
+ *     summary: Register a new policyholder
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               contact:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Policyholder successfully registered
+ *       400:
+ *         description: Missing required fields
+ *       409:
+ *         description: User already exists
+ *       500:
+ *         description: Server error
+ */
 // ✅ Register a New Policyholder
 router.post('/register', async (req, res) => {
     const { name, contact, password } = req.body;
@@ -34,6 +74,41 @@ router.post('/register', async (req, res) => {
     }
 });
 
+
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Login as a policyholder
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               contact:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully authenticated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *       400:
+ *         description: Missing credentials
+ *       401:
+ *         description: Invalid credentials
+ *       500:
+ *         description: Server error
+ */
 // ✅ Login Using Policyholders Table
 router.post('/login', async (req, res) => {
     const { contact, password } = req.body;
@@ -59,6 +134,37 @@ router.post('/login', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
+/**
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: Get the current logged-in user's profile
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved user profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 name:
+ *                   type: string
+ *                 contact:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
 
 // ✅ Get current user profile
 router.get('/me', authenticateToken, async (req, res) => {

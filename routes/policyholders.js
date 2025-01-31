@@ -1,7 +1,45 @@
+/**
+ * @swagger
+ * tags:
+ *   name: Policyholders
+ *   description: API for managing policyholders
+ */
+
+
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const authenticateToken = require('../middleware/authMiddleware.js');
+
+
+/**
+ * @swagger
+ * /policyholders:
+ *   post:
+ *     summary: Register a new policyholder
+ *     tags: [Policyholders]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               contact:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Policyholder successfully registered
+ *       400:
+ *         description: Missing required fields
+ *       500:
+ *         description: Server error
+ */
 
 // ✅ Create a New Policyholder (Register)
 router.post('/', async (req, res) => {
@@ -19,6 +57,19 @@ router.post('/', async (req, res) => {
     }
 });
 
+
+/**
+ * @swagger
+ * /policyholders:
+ *   get:
+ *     summary: Get all policyholders
+ *     tags: [Policyholders]
+ *     responses:
+ *       200:
+ *         description: List of all policyholders
+ *       500:
+ *         description: Server error
+ */
 // ✅ Get All Policyholders (Protected)
 router.get('/', authenticateToken, async (req, res) => {
     try {
@@ -28,6 +79,27 @@ router.get('/', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
+/**
+ * @swagger
+ * /policyholders/{id}:
+ *   get:
+ *     summary: Get a specific policyholder by ID
+ *     tags: [Policyholders]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: ID of the policyholder to fetch
+ *     responses:
+ *       200:
+ *         description: Policyholder found
+ *       404:
+ *         description: Policyholder not found
+ *       500:
+ *         description: Server error
+ */
 
 // ✅ Get a Specific Policyholder by ID (Protected)
 router.get('/:id', authenticateToken, async (req, res) => {
@@ -40,6 +112,38 @@ router.get('/:id', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
+/**
+ * @swagger
+ * /policyholders/{id}:
+ *   put:
+ *     summary: Update a policyholder
+ *     tags: [Policyholders]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: ID of the policyholder to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               contact:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Policyholder updated
+ *       404:
+ *         description: Policyholder not found
+ *       500:
+ *         description: Server error
+ */
 
 // ✅ Update a Policyholder (Protected)
 router.put('/:id', authenticateToken, async (req, res) => {
@@ -60,6 +164,28 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 });
 
+
+/**
+ * @swagger
+ * /policyholders/{id}:
+ *   delete:
+ *     summary: Delete a policyholder and associated policies
+ *     tags: [Policyholders]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         description: ID of the policyholder to delete
+ *     responses:
+ *       204:
+ *         description: Policyholder successfully deleted
+ *       404:
+ *         description: Policyholder not found
+ *       500:
+ *         description: Server error
+ */
+
+
 // ✅ Delete a Policyholder and Associated Policies (Protected)
 router.delete('/:id', authenticateToken, async (req, res) => {
     try {
@@ -71,6 +197,24 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
+
+/**
+ * @swagger
+ * /policyholders/me:
+ *   get:
+ *     summary: Get the logged-in policyholder's data
+ *     tags: [Policyholders]
+ *     responses:
+ *       200:
+ *         description: Logged-in policyholder data
+ *       401:
+ *         description: Invalid token payload
+ *       500:
+ *         description: Server error
+ */
+
 
 router.get('/me', authenticateToken, (req, res) => {
   if (!req.policyholder?.id) {

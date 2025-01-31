@@ -1,3 +1,12 @@
+
+/**
+ * @swagger
+ * tags:
+ *   name: Claims
+ *   description: API for managing insurance claims
+ */
+
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../db'); // Import PostgreSQL connection
@@ -9,6 +18,37 @@ const validTransitions = {
   denied: [],
   paid: []
 };
+
+
+/**
+ * @swagger
+ * /claims:
+ *   post:
+ *     summary: Create a new claim
+ *     tags: [Claims]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               policyId:
+ *                 type: integer
+ *               amount:
+ *                 type: number
+ *               description:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Claim created successfully
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ */
 
 // ✅ Create a Claim (Protected Route)
 router.post('/', authenticateToken, async (req, res) => {
@@ -42,6 +82,40 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /claims/{id}:
+ *   put:
+ *     summary: Update a claim status
+ *     tags: [Claims]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Claim status updated
+ *       400:
+ *         description: Invalid status transition
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Claim not found
+ */
+
 // ✅ Update a Claim Status (Protected Route)
 router.put('/:id', authenticateToken, async (req, res) => {
   const { status } = req.body;
@@ -68,6 +142,29 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /claims/{id}:
+ *   delete:
+ *     summary: Delete a claim
+ *     tags: [Claims]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       204:
+ *         description: Claim deleted successfully
+ *       404:
+ *         description: Claim not found
+ *       401:
+ *         description: Unauthorized
+ */
+
 // ✅ Delete a Claim (Protected Route)
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
@@ -81,6 +178,24 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+
+/**
+ * @swagger
+ * /claims:
+ *   get:
+ *     summary: Get all claims
+ *     tags: [Claims]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of claims
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
 // ✅ Get All Claims (Protected Route)
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -90,6 +205,32 @@ router.get('/', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+/**
+ * @swagger
+ * /claims/{id}:
+ *   get:
+ *     summary: Get a claim by ID
+ *     tags: [Claims]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Claim details
+ *       404:
+ *         description: Claim not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
 
 // ✅ Get a Single Claim by ID (Protected Route)
 router.get('/:id', authenticateToken, async (req, res) => {

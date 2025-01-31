@@ -1,7 +1,52 @@
+
+/**
+ * @swagger
+ * tags:
+ *   name: Policies
+ *   description: API for managing insurance policies
+ */
+
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const authenticateToken = require('../middleware/authMiddleware.js');
+
+/**
+ * @swagger
+ * /policies:
+ *   post:
+ *     summary: Create a new policy
+ *     tags: [Policies]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               type:
+ *                 type: string
+ *               amount:
+ *                 type: number
+ *               policyholderId:
+ *                 type: integer
+ *               startDate:
+ *                 type: string
+ *                 format: date
+ *               endDate:
+ *                 type: string
+ *                 format: date
+ *     responses:
+ *       201:
+ *         description: Policy created successfully
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ */
 
 // ✅ Create Policy (Protected)
 router.post('/', authenticateToken, async (req, res) => {
@@ -48,6 +93,23 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /policies:
+ *   get:
+ *     summary: Get all policies
+ *     tags: [Policies]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of policies
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
 // ✅ Get all policies (Protected)
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -57,6 +119,32 @@ router.get('/', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+/**
+ * @swagger
+ * /policies/{id}:
+ *   get:
+ *     summary: Get a specific policy by ID
+ *     tags: [Policies]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Policy details
+ *       404:
+ *         description: Policy not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
 
 // ✅ Get specific policy (Protected)
 router.get('/:id', authenticateToken, async (req, res) => {
@@ -69,6 +157,31 @@ router.get('/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+/**
+ * @swagger
+ * /policies/{id}:
+ *   delete:
+ *     summary: Delete a policy
+ *     tags: [Policies]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       204:
+ *         description: Policy deleted successfully
+ *       404:
+ *         description: Policy not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
 
 // ✅ Delete Policy (Protected)
 router.delete('/:id', authenticateToken, async (req, res) => {

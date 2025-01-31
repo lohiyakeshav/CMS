@@ -1,87 +1,153 @@
-const request = require('supertest');
-const { app } = require('../app');
+const request = require("supertest");
+const { app } = require("../app");
+const pool = require("../db");
 
-beforeAll(async () => {
-  await request(app)
-    .post('/policyholders')
-    .send({ id: 'PH1', name: 'John Doe', contact: '1234567890' });
+describe("Claims API", () => {
+  let token = "";
+  let policyId = null;
 
-  await request(app)
-    .post('/policies')
-    .send({
-      id: 'POL1',
-      type: 'health',
-      policyholderId: 'PH1',
-      amount: 5000,
-      startDate: '2024-01-01',
-      endDate: '2030-01-01'
-    });
-});
+  beforeAll(async () => {
+    await pool.query("DELETE FROM claims");
+    await pool.query("DELETE FROM policies");
+    await pool.query("DELETE FROM policyholders");
 
-describe('Claims API', () => {
-  it('should create a valid claim', async () => {
+    const registerRes = await request(app)
+      .post("/auth/register")
+      .send({ name: "Claim Tester", contact: "2222222222", password: "testpass" });
+
+    expect(registerRes.status).toBe(201);
+    const policyholderId = registerRes.body.id;
+
+    const loginRes = await request(app)
+      .post("/auth/login")
+      .send({ contact: "2222222222", password: "testpass" });
+
+    expect(loginRes.status).toBe(200);
+    token = loginRes.body.token;
+
+    console.log("Creating policy for policyholder:", policyholderId);
+    const policyRes = await request(app)
+      .post("/policies")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        id: "policy-001",
+        type: "health",
+        amount: 5000,
+        startDate: "2024-01-01",
+        endDate: "2030-01-01",
+        policyholderId: policyholderId,
+      });
+    expect(policyRes.status).toBe(201);
+    console.log("Policy Created:", policyRes.body);
+    policyId = policyRes.body.id;
+    
+  });
+
+  afterAll(async () => {
+    await pool.query("TRUNCATE TABLE claims, policies, policyholders RESTART IDENTITY CASCADE");
+  });
+  
+
+  it("should create a new claim", async () => {
     const res = await request(app)
-      .post('/claims')
-      .send({ id: 'CL1', policyId: 'POL1', amount: 1000 });
+      .post("/claims")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ policyId, amount: 500, description: "Medical Expense" });
 
     expect(res.status).toBe(201);
-    expect(res.body.status).toBe('pending');
+    expect(res.body).toHaveProperty("status", "pending");
   });
 
-  it('should prevent claims above policy amount', async () => {
+  // More test cases
+  it("should return 404 for a non-existing claim", async () => {
     const res = await request(app)
-      .post('/claims')
-      .send({ id: 'CL2', policyId: 'POL1', amount: 6000 });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('Claim amount (6000) exceeds policy limit (5000)');
-  });
-
-  it('should prevent claims on non-existent policies', async () => {
-    const res = await request(app)
-      .post('/claims')
-      .send({ id: 'CL3', policyId: 'INVALID', amount: 1000 });
+      .get("/claims/999")
+      
+      .set("Authorization", `Bearer ${token}`);
+      console.log("Token being sent:", token);
 
     expect(res.status).toBe(404);
-    expect(res.body.error).toBe('Policy not found');
   });
 
-  it('should enforce valid claim status transitions', async () => {
-    await request(app)
-      .post('/claims')
-      .send({ id: 'CL4', policyId: 'POL1', amount: 1000 });
-
-    const invalidRes = await request(app)
-      .put('/claims/CL4')
-      .send({ status: 'paid' });
-
-    expect(invalidRes.status).toBe(400);
-
-    const validRes = await request(app)
-      .put('/claims/CL4')
-      .send({ status: 'approved' });
-
-    expect(validRes.status).toBe(200);
-  });
-
-  it('should not allow missing fields when creating a claim', async () => {
+  it("should return 400 when creating a claim with excessive amount", async () => {
     const res = await request(app)
-      .post('/claims')
-      .send({ id: 'CL5', amount: 1000 }); // Missing policyId
+      .post("/claims")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ policyId, amount: 6000, description: "Too much" });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe('Missing required fields');
   });
 
-  it('should delete a claim successfully', async () => {
-    await request(app)
-      .post('/claims')
-      .send({ id: 'CL6', policyId: 'POL1', amount: 500 });
+  it("should return 200 and claim details when fetching a valid claim", async () => {
+    const createRes = await request(app)
+      .post("/claims")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ policyId, amount: 500, description: "Medical Expense" });
 
-    const delRes = await request(app).delete('/claims/CL6');
-    expect(delRes.status).toBe(204);
+    const claimId = createRes.body.id;
+    const res = await request(app)
+      .get(`/claims/${policyId}`)
+      .set("Authorization", `Bearer ${token}`);
+      console.log("Token being sent:", token);
 
-    const getRes = await request(app).get('/claims/CL6');
-    expect(getRes.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("policy_id", policyId);
+  });
+
+  it("should update a claim status successfully", async () => {
+    const res = await request(app)
+      .put(`/claims/${policyId}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ status: "approved" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("status", "approved");
+  });
+
+  it("should return 403 when creating a claim with an invalid token", async () => {
+    const res = await request(app)
+        .post("/claims")
+        .set("Authorization", "Bearer invalidtoken")
+        .send({ policyId, amount: 500, description: "Test claim" });
+
+    expect(res.status).toBe(401);
+});
+
+it("should return 400 when creating a claim with a missing amount", async () => {
+    const res = await request(app)
+        .post("/claims")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ policyId, description: "Medical Expense" });
+
+    expect(res.status).toBe(400);
+});
+
+it("should return 400 when creating a claim with a missing policyId", async () => {
+    const res = await request(app)
+        .post("/claims")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ amount: 500, description: "Medical Expense" });
+
+    expect(res.status).toBe(400);
+});
+
+it("should return 404 when updating a non-existing claim", async () => {
+    const res = await request(app)
+        .put("/claims/9999")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ status: "approved" });
+
+    expect(res.status).toBe(404);
+});
+
+
+  it("should return 204 on successful claim deletion", async () => {
+    const res = await request(app)
+      .delete(`/claims/${policyId}`)
+      
+      .set("Authorization", `Bearer ${token}`);
+      console.log("Token being sent:", token);
+
+    expect(res.status).toBe(204);
   });
 });

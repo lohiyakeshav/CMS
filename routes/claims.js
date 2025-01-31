@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { claims } = require('../models/claim');
-const { policies } = require('../models/policy');
+const pool = require('../db'); // Import PostgreSQL connection
+const authenticateToken = require('../middleware/authMiddleware.js'); // Import JWT middleware
 
 const validTransitions = {
   pending: ['approved', 'denied'],
@@ -10,62 +10,98 @@ const validTransitions = {
   paid: []
 };
 
-// Create a Claim
-router.post('/', (req, res) => {
-  const { id, amount, date, description, policyId } = req.body;
+// ✅ Create a Claim (Protected Route)
+router.post('/', authenticateToken, async (req, res) => {
+  const { policyId, amount, description } = req.body;
 
-  if (!id || !amount || !policyId) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  // Required fields check
+  if (!policyId || !amount) {
+    return res.status(400).json({ 
+      error: 'Missing required fields: policyId and amount are mandatory' 
+    });
   }
 
-  const policy = policies.find(p => p.id === policyId);
-  if (!policy) {
-    return res.status(404).json({ error: 'Policy not found' });
-  }
-
-  if (policy.endDate && new Date(policy.endDate) < new Date(date || new Date())) {
-    return res.status(400).json({ error: 'Policy has expired' });
-  }
-
-  if (amount > policy.amount) {
-    return res.status(400).json({ error: `Claim amount (${amount}) exceeds policy limit (${policy.amount})` });
-  }
-
-  const newClaim = { 
-    id, 
-    amount, 
-    date: date || new Date().toISOString(), 
-    description, 
-    policyId, 
-    status: 'pending'  
-  };
-
-  claims.push(newClaim);
-  res.status(201).json(newClaim);
-});
-
-// Update a Claim (Status Transition)
-router.put('/:id', (req, res) => {
-  const claim = claims.find(c => c.id === req.params.id);
-  if (!claim) return res.status(404).json({ error: 'Claim not found' });
-
-  if (req.body.status) {
-    if (!validTransitions[claim.status]?.includes(req.body.status)) {
-      return res.status(400).json({ error: `Invalid status transition from ${claim.status} to ${req.body.status}` });
+  try {
+    const policy = await pool.query('SELECT * FROM policies WHERE id = $1', [policyId]);
+    if (policy.rows.length === 0) {
+      return res.status(404).json({ error: 'Policy not found' });
     }
-    claim.status = req.body.status;
+
+    if (amount > policy.rows[0].amount) {
+      return res.status(400).json({ error: `Claim amount (${amount}) exceeds policy limit (${policy.rows[0].amount})` });
+    }
+
+    const result = await pool.query(
+      'INSERT INTO claims (policy_id, amount, description) VALUES ($1, $2, $3) RETURNING *',
+      [policyId, amount, description]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-
-  res.json(claim);
 });
 
-router.delete('/:id', (req, res) => {
-  const index = claims.findIndex(c => c.id === req.params.id);
-  if (index === -1) return res.status(404).json({ error: 'Claim not found' });
+// ✅ Update a Claim Status (Protected Route)
+router.put('/:id', authenticateToken, async (req, res) => {
+  const { status } = req.body;
+  if (!status) return res.status(400).json({ error: 'Missing status field' });
 
-  claims.splice(index, 1);
-  res.status(204).send();
+  try {
+    const claim = await pool.query('SELECT * FROM claims WHERE id = $1', [req.params.id]);
+    if (claim.rows.length === 0) {
+      return res.status(404).json({ error: 'Claim not found' });
+    }
+
+    if (!validTransitions[claim.rows[0].status]?.includes(status)) {
+      return res.status(400).json({ error: `Invalid status transition from ${claim.rows[0].status} to ${status}` });
+    }
+
+    const updatedClaim = await pool.query(
+      'UPDATE claims SET status = $1 WHERE id = $2 RETURNING *',
+      [status, req.params.id]
+    );
+
+    res.json(updatedClaim.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
+// ✅ Delete a Claim (Protected Route)
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const claim = await pool.query('DELETE FROM claims WHERE id = $1 RETURNING *', [req.params.id]);
+    if (claim.rows.length === 0) {
+      return res.status(404).json({ error: 'Claim not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ Get All Claims (Protected Route)
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const claims = await pool.query('SELECT * FROM claims');
+    res.json(claims.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ Get a Single Claim by ID (Protected Route)
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const claim = await pool.query('SELECT * FROM claims WHERE id = $1', [req.params.id]);
+    if (claim.rows.length === 0) {
+      return res.status(404).json({ error: 'Claim not found' });
+    }
+    res.json(claim.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports = router;

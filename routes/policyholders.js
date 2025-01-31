@@ -1,77 +1,82 @@
 const express = require('express');
 const router = express.Router();
+const pool = require('../db');
+const authenticateToken = require('../middleware/authMiddleware.js');
 
-// Import Policyholder and Policies models
-const { policyholders } = require('../models/policyholder');
-const { policies } = require('../models/policy'); // Ensure policies are imported
+// ✅ Create a New Policyholder (Register)
+router.post('/', async (req, res) => {
+    const { name, contact, password } = req.body;
 
-// Create a new Policyholder
-router.post('/', (req, res) => {
-  const { id, name, contact } = req.body;
-
-  // Check for duplicate ID before validating required fields
-  if (policyholders.some(ph => ph.id === id)) {
-    return res.status(409).json({ error: 'Policyholder ID already exists' });  
-  }
-
-  if (!id || !name || !contact) {
-    return res.status(400).json({ error: 'All fields (id, name, contact) are required.' });
-  }
-
-  const newPolicyholder = { id, name, contact, policies: [] };
-  policyholders.push(newPolicyholder);
-  res.status(201).json(newPolicyholder);
-});
-
-// Read all Policyholders
-router.get('/', (req, res) => {
-  res.json(policyholders);
-});
-
-// Read a specific Policyholder by ID
-router.get('/:id', (req, res) => {
-  const policyholder = policyholders.find(ph => ph.id === req.params.id);
-
-  if (!policyholder) {
-    return res.status(404).json({ error: 'Policyholder not found.' });
-  }
-
-  res.json(policyholder);
-});
-
-// Update a Policyholder
-router.put('/:id', (req, res) => {
-  const policyholder = policyholders.find(ph => ph.id === req.params.id);
-
-  if (!policyholder) {
-    return res.status(404).json({ error: 'Policyholder not found.' });
-  }
-
-  const { name, contact } = req.body;
-  if (name) policyholder.name = name;
-  if (contact) policyholder.contact = contact;
-
-  res.json(policyholder);
-});
-
-// Delete a Policyholder and Associated Policies
-router.delete('/:id', (req, res) => {
-  const phIndex = policyholders.findIndex(ph => ph.id === req.params.id);
-  if (phIndex === -1) {
-    return res.status(404).json({ error: 'Policyholder not found' });
-  }
-
-  // Remove associated policies
-  for (let i = policies.length - 1; i >= 0; i--) {
-    if (policies[i].policyholderId === req.params.id) {
-      policies.splice(i, 1);
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const result = await pool.query(
+            'INSERT INTO policyholders (name, contact, password) VALUES ($1, $2, $3) RETURNING id, name, contact',
+            [name, contact, hashedPassword]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
+});
+
+// ✅ Get All Policyholders (Protected)
+router.get('/', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, name, contact FROM policyholders');
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ✅ Get a Specific Policyholder by ID (Protected)
+router.get('/:id', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, name, contact FROM policyholders WHERE id = $1', [req.params.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Policyholder not found.' });
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ✅ Update a Policyholder (Protected)
+router.put('/:id', authenticateToken, async (req, res) => {
+    const { name, contact } = req.body;
+
+    try {
+        const existing = await pool.query('SELECT * FROM policyholders WHERE id = $1', [req.params.id]);
+        if (existing.rows.length === 0) return res.status(404).json({ error: 'Policyholder not found.' });
+
+        const updated = await pool.query(
+            'UPDATE policyholders SET name = $1, contact = $2 WHERE id = $3 RETURNING id, name, contact',
+            [name || existing.rows[0].name, contact || existing.rows[0].contact, req.params.id]
+        );
+
+        res.json(updated.rows[0]);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ✅ Delete a Policyholder and Associated Policies (Protected)
+router.delete('/:id', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('DELETE FROM policyholders WHERE id = $1 RETURNING *', [req.params.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Policyholder not found' });
+
+        res.status(204).send();
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/me', authenticateToken, (req, res) => {
+  if (!req.policyholder?.id) {
+    return res.status(401).json({ error: 'Invalid token payload' });
   }
-
-  // Delete policyholder
-  policyholders.splice(phIndex, 1);
-
-  res.status(204).send();
+  // ... rest of handler ...
 });
 
 module.exports = router;

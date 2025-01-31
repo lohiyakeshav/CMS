@@ -71,9 +71,9 @@ pool.query("SELECT NOW()", (err, res) => {
 
 // Server setup
 if (process.env.NODE_ENV !== "test") {
-  const PORT = process.env.PORT || 3000;
+  const PORT =  3000;
   const server = app.listen(PORT, () => {
-    console.log(`Server is running on https://cms-2m4x.onrender.com:${PORT}`);
+    console.log(`Server is running on http://localhost:${PORT}`);
     console.log(`Swagger docs available at https://cms-2m4x.onrender.com/api-docs`);
   });
   module.exports = { app, server };

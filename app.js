@@ -22,7 +22,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: "http://localhost:3000",
+        url: "https://cms-2m4x.onrender.com",  // Cloud URL
       },
     ],
   },
@@ -51,7 +51,16 @@ app.get("/", (req, res) => {
 });
 
 // Database connection
-const pool = require("./db");
+const { Pool } = require("pg");
+
+// Use cloud database URL from environment variable
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,  // Ensure DATABASE_URL is set in .env
+  ssl: {
+    rejectUnauthorized: false,  // For cloud SSL connections
+  },
+});
+
 pool.query("SELECT NOW()", (err, res) => {
   if (err) {
     console.error("Database connection error", err);
@@ -64,8 +73,8 @@ pool.query("SELECT NOW()", (err, res) => {
 if (process.env.NODE_ENV !== "test") {
   const PORT = process.env.PORT || 3000;
   const server = app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-    console.log(`Swagger docs available at http://localhost:${PORT}/api-docs`);
+    console.log(`Server is running on https://cms-2m4x.onrender.com:${PORT}`);
+    console.log(`Swagger docs available at https://cms-2m4x.onrender.com/api-docs`);
   });
   module.exports = { app, server };
 } else {

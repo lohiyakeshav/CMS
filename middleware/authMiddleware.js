@@ -31,7 +31,10 @@ const authenticateToken = (req, res, next) => {
       return res.status(401).json({ error: 'Invalid token payload' });
     }
 
-    req.policyholder = { id: decoded.policyholderId };
+    req.policyholder = {
+      id: decoded.policyholderId,
+      role: decoded.role
+    };
     next();
   });
 };

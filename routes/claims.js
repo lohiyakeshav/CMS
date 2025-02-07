@@ -1,4 +1,3 @@
-
 /**
  * @swagger
  * tags:
@@ -6,6 +5,15 @@
  *   description: API for managing insurance claims
  */
 
+/**
+ * @swagger
+ * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ */
 
 const express = require('express');
 const router = express.Router();
@@ -118,25 +126,28 @@ router.post('/', authenticateToken, async (req, res) => {
 
 // ✅ Update a Claim Status (Protected Route)
 router.put('/:id', authenticateToken, async (req, res) => {
-  const { status } = req.body;
-  if (!status) return res.status(400).json({ error: 'Missing status field' });
-
   try {
-    const claim = await pool.query('SELECT * FROM claims WHERE id = $1', [req.params.id]);
-    if (claim.rows.length === 0) {
-      return res.status(404).json({ error: 'Claim not found' });
+    const { status } = req.body;
+    
+    // First verify ownership
+    const claimCheck = await pool.query(`
+      SELECT c.id 
+      FROM claims c
+      JOIN policies p ON c.policy_id = p.id
+      WHERE c.id = $1 AND p.policyholder_id = $2
+    `, [req.params.id, req.policyholder.id]);
+
+    if (claimCheck.rows.length === 0) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
-    if (!validTransitions[claim.rows[0].status]?.includes(status)) {
-      return res.status(400).json({ error: `Invalid status transition from ${claim.rows[0].status} to ${status}` });
-    }
-
-    const updatedClaim = await pool.query(
-      'UPDATE claims SET status = $1 WHERE id = $2 RETURNING *',
+    // Proceed with update...
+    const result = await pool.query(
+      "UPDATE claims SET status = $1 WHERE id = $2 RETURNING *",
       [status, req.params.id]
     );
-
-    res.json(updatedClaim.rows[0]);
+    
+    res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -199,8 +210,14 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // ✅ Get All Claims (Protected Route)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const claims = await pool.query('SELECT * FROM claims');
-    res.json(claims.rows);
+    const result = await pool.query(`
+      SELECT c.* 
+      FROM claims c
+      JOIN policies p ON c.policy_id = p.id
+      WHERE p.policyholder_id = $1
+    `, [req.policyholder.id]);
+    
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -235,11 +252,18 @@ router.get('/', authenticateToken, async (req, res) => {
 // ✅ Get a Single Claim by ID (Protected Route)
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const claim = await pool.query('SELECT * FROM claims WHERE id = $1', [req.params.id]);
-    if (claim.rows.length === 0) {
-      return res.status(404).json({ error: 'Claim not found' });
+    const result = await pool.query(`
+      SELECT c.* 
+      FROM claims c
+      JOIN policies p ON c.policy_id = p.id
+      WHERE c.id = $1 AND p.policyholder_id = $2
+    `, [req.params.id, req.policyholder.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Claim not found or access denied" });
     }
-    res.json(claim.rows[0]);
+    
+    res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const authMiddleware = require('../middleware/authMiddleware');
+const { sendEmail } = require('../mail');
 
 // Middleware to check admin privileges
 const adminOnly = (req, res, next) => {
@@ -23,24 +24,59 @@ router.get('/users', authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
-// Other admin routes...
-// For example, approving a policy purchase:
-router.post('/approvePolicy/:policyId', authMiddleware, async (req, res) => {
-  const { policyId } = req.params;
-  const { decision } = req.body; // decision: true (approve) or false (reject)
+// Utility function to get user email with role check
+const getRecipientEmail = async (userId) => {
+  const result = await pool.query(
+    'SELECT email FROM users WHERE id = $1 AND role = $2',
+    [userId, 'user']
+  );
+  return result.rows[0]?.email;
+};
+
+// Approve/Reject Policy
+router.post('/approvePolicy/:policyId', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const status = decision ? 'approved' : 'denied';
-    const policy = await pool.query(
-      'UPDATE policy_purchases SET status = $1, approved_by = $2, approved_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
-      [status, req.user.id, policyId]
+    const { policyId } = req.params;
+    const { decision } = req.body;
+
+    // 1. Update policy status
+    const newStatus = decision ? 'approved' : 'rejected';
+    await pool.query(
+      'UPDATE policy_purchases SET status = $1 WHERE id = $2',
+      [newStatus, policyId]
     );
-    if (policy.rows.length === 0) {
-      return res.status(404).json({ error: 'Policy not found' });
+
+    // 2. Get user email
+    const policy = await pool.query(
+      'SELECT user_id FROM policy_purchases WHERE id = $1',
+      [policyId]
+    );
+    const userEmail = await getRecipientEmail(policy.rows[0].user_id);
+
+    // 3. Send notification if email exists
+    if (userEmail) {
+      const subject = decision ? 'Policy Approved' : 'Policy Rejected';
+      try {
+        await sendEmail(
+          userEmail,
+          subject,
+          decision ? 'policyApproved' : 'policyRejected',
+          {
+            policyId,
+            status: decision ? 'approved' : 'rejected',
+            decisionDate: new Date().toLocaleDateString()
+          }
+        );
+      } catch (emailError) {
+        console.error('Email sending failed:', emailError);
+      }
     }
-    res.json(policy.rows[0]);
+
+    res.json({ success: true, message: `Policy ${newStatus}` });
+
   } catch (error) {
-    console.error('Error in /approvePolicy:', error);
-    res.status(500).json({ error: 'Failed to update policy status' });
+    console.error('Policy approval error:', error);
+    res.status(500).json({ error: 'Failed to process policy decision' });
   }
 });
 
@@ -60,11 +96,13 @@ router.get('/pendingPolicies', authMiddleware, async (req, res) => {
 
 // Fetch pending claims
 router.get('/pendingClaims', authMiddleware, async (req, res) => {
-  console.log("Chal raha hai API");
   try {
     const claims = await pool.query(
-      'SELECT * FROM claims WHERE status = $1',
-      ['pending']
+      `SELECT c.*, pp.user_id, u.email 
+       FROM claims c
+       JOIN policy_purchases pp ON c.policy_purchase_id = pp.id
+       JOIN users u ON pp.user_id = u.id
+       WHERE c.status = 'pending'`
     );
     res.json(claims.rows);
   } catch (error) {
@@ -73,23 +111,50 @@ router.get('/pendingClaims', authMiddleware, async (req, res) => {
   }
 });
 
-// Approve or reject a claim
-router.post('/approveClaim/:claimId', authMiddleware, async (req, res) => {
-  const { claimId } = req.params;
-  const { decision, rejection_reason } = req.body; // decision: true (approve) or false (reject)
+// Approve/Reject Claim
+router.post('/approveClaim/:claimId', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const status = decision ? 'approved' : 'denied';
-    const claim = await pool.query(
-      'UPDATE claims SET status = $1, approved_by = $2, approved_at = CURRENT_TIMESTAMP, rejection_reason = $3 WHERE id = $4 RETURNING *',
-      [status, req.user.id, rejection_reason, claimId]
+    const { claimId } = req.params;
+    const { decision, rejection_reason } = req.body;
+
+    // 1. Update claim status
+    const newStatus = decision ? 'approved' : 'rejected';
+    await pool.query(
+      'UPDATE claims SET status = $1, rejection_reason = $2 WHERE id = $3',
+      [newStatus, rejection_reason || null, claimId]
     );
-    if (claim.rows.length === 0) {
-      return res.status(404).json({ error: 'Claim not found' });
+
+    // 2. Get user email through policy purchase
+    const claim = await pool.query(
+      `SELECT pp.user_id 
+       FROM claims c
+       JOIN policy_purchases pp ON c.policy_purchase_id = pp.id
+       WHERE c.id = $1`,
+      [claimId]
+    );
+    const userEmail = await getRecipientEmail(claim.rows[0].user_id);
+
+    // 3. Send notification if email exists
+    if (userEmail) {
+      const subject = decision ? 'Claim Approved' : 'Claim Rejected';
+      const template = decision ? 'claimApproved' : 'claimRejected';
+      
+      try {
+        await sendEmail(userEmail, subject, template, {
+          claimId,
+          decision,
+          rejectionReason: rejection_reason || 'N/A'
+        });
+      } catch (emailError) {
+        console.error('Email sending failed:', emailError);
+      }
     }
-    res.json(claim.rows[0]);
+
+    res.json({ success: true, message: `Claim ${newStatus}` });
+
   } catch (error) {
-    console.error('Error in /approveClaim:', error);
-    res.status(500).json({ error: 'Failed to update claim status' });
+    console.error('Claim approval error:', error);
+    res.status(500).json({ error: 'Failed to process claim decision' });
   }
 });
 

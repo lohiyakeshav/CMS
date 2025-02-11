@@ -115,11 +115,18 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/myPolicies', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT pp.id, pp.user_id, pp.product_id, pp.purchase_date, pp.valid_until, pp.status, 
-              ip.title, ip.description, ip.coverage_amount, ip.premium, ip.duration
+       `SELECT 
+        pp.id,
+        pp.purchase_date,
+        pp.valid_until,
+        pp.status AS policy_status,
+        c.status AS claim_status,
+        c.claim_amount,
+        c.claim_date
        FROM policy_purchases pp
-       JOIN insurance_products ip ON pp.product_id = ip.id
-       WHERE pp.user_id = $1`,
+       LEFT JOIN claims c ON pp.id = c.policy_purchase_id
+       WHERE pp.user_id = $1
+       ORDER BY pp.purchase_date DESC`,
       [req.user.id] // Filter by logged-in user's ID
     );
     res.json(result.rows);

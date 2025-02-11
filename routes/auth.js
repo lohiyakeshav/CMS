@@ -75,7 +75,7 @@ router.post('/login', async (req, res) => {
   }
   try {
     const user = await pool.query(
-      'SELECT id, name, password, role FROM users WHERE email = $1',
+      'SELECT id, name, password, role, email FROM users WHERE email = $1',
       [email]
     );
     if (user.rows.length === 0) {
@@ -90,6 +90,22 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
     );
+    // Send login notification email
+    try {
+      await sendEmail(
+        user.rows[0].email, // Use email from database
+        'Successful Login Notification',
+         'loginAlert',
+  {
+  name: user.rows[0].name,
+  loginTime: new Date().toLocaleString(),
+  }
+  );
+  } catch (emailError) {
+  console.error('Login email notification failed:', emailError);
+  }
+  
+    
     res.json({ token, user: { id: user.rows[0].id, name: user.rows[0].name, role: user.rows[0].role } });
   } catch (error) {
     console.error('Error in /login:', error);

@@ -223,77 +223,93 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ Submit a claim for a specific policy
-router.post('/:policyId', authMiddleware, async (req, res) => {
-  const { policyId } = req.params;
-  const { claim_amount } = req.body;
 
-  try {
-    const policyResult = await pool.query(
-      `SELECT * FROM policy_purchases 
-       WHERE id = $1 AND user_id = $2 AND status = 'approved'`,
-      [policyId, req.user.id]
-    );
-
-    if (policyResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Policy not found or not approved' });
-    }
-
-    const claimResult = await pool.query(
-      `INSERT INTO claims 
-        (user_id, product_id, claim_amount, status) 
-       VALUES 
-        ($1, $2, $3, 'pending') 
-       RETURNING *`,
-      [req.user.id, policyResult.rows[0].product_id, claim_amount]
-    );
-
-    res.status(201).json(claimResult.rows[0]);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.post('/submitForClaim', authMiddleware, async (req, res) => {
+/**
+ * @swagger
+ * /claims/claimtriggered:
+ *   post:
+ *     summary: Trigger a new insurance claim
+ *     description: Creates a new claim entry for an approved policy purchase
+ *     tags: [Claims]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - policy_purchase_id
+ *               - claim_amount
+ *             properties:
+ *               policy_purchase_id:
+ *                 type: integer
+ *                 example: 123
+ *               claim_amount:
+ *                 type: number
+ *                 example: 5000.00
+ *     responses:
+ *       201:
+ *         description: Claim successfully triggered
+ *       400:
+ *         description: Invalid request or duplicate claim
+ *       500:
+ *         description: Server error
+ */
+router.post('/claimtriggered', authMiddleware, async (req, res) => {
+  console.log('⚡ Claim Trigger Endpoint Activated');
   const { policy_purchase_id, claim_amount } = req.body;
 
-  // Validate request body
-  if (!policy_purchase_id || !claim_amount) {
-    return res.status(400).json({ error: 'Policy Purchase ID and claim amount are required' });
-  }
-
   try {
-    // Check if the policy purchase exists, belongs to the user, and is approved
-    const policyPurchaseResult = await pool.query(
+    // 1. Validate Policy Purchase
+    const policyPurchase = await pool.query(
       `SELECT * FROM policy_purchases 
-       WHERE id = $1 AND user_id = $2 AND status = 'approved'`,
+       WHERE id = $1 
+       AND user_id = $2 
+       AND status = 'approved'`,
       [policy_purchase_id, req.user.id]
     );
-    if (policyPurchaseResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Policy purchase not found, not approved, or does not belong to the user' });
+
+    if (policyPurchase.rows.length === 0) {
+      console.warn('🚫 Invalid policy purchase attempt:', { policy_purchase_id, user: req.user.id });
+      return res.status(400).json({ 
+        error: 'Valid approved policy purchase not found' 
+      });
     }
 
-    // Check if the user has already claimed this policy purchase
+    // 2. Check Existing Claims
     const existingClaim = await pool.query(
-      'SELECT * FROM claims WHERE policy_purchase_id = $1',
+      `SELECT * FROM claims 
+       WHERE policy_purchase_id = $1`,
       [policy_purchase_id]
     );
+
     if (existingClaim.rows.length > 0) {
-      return res.status(400).json({ error: 'You have already claimed this policy purchase' });
+      console.warn('🚫 Duplicate claim attempt:', policy_purchase_id);
+      return res.status(400).json({ 
+        error: 'Claim already exists for this policy purchase' 
+      });
     }
 
-    // Insert the new claim into the database
-    const claim = await pool.query(
-      `INSERT INTO claims (policy_purchase_id, claim_amount, status)
-       VALUES ($1, $2, $3)
+    // 3. Create New Claim
+    const newClaim = await pool.query(
+      `INSERT INTO claims 
+       (policy_purchase_id, claim_amount, status) 
+       VALUES ($1, $2, 'pending') 
        RETURNING *`,
-      [policy_purchase_id, claim_amount, 'pending']
+      [policy_purchase_id, claim_amount]
     );
 
-    res.status(201).json(claim.rows[0]);
+    console.log('✅ New claim created:', newClaim.rows[0].id);
+    res.status(201).json(newClaim.rows[0]);
+
   } catch (error) {
-    console.error('Error in /submitForClaim:', error);
-    res.status(500).json({ error: 'Failed to submit claim', details: error.message });
+    console.error('💥 Claim Trigger Error:', error);
+    res.status(500).json({ 
+      error: 'Claim processing failed',
+      details: error.message 
+    });
   }
 });
 
@@ -308,6 +324,75 @@ router.get('/userClaims', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Error in /userClaims:', error);
     res.status(500).json({ error: 'Failed to fetch claims' });
+  }
+});
+
+router.put('/approveClaim/:claimId', authMiddleware, async (req, res) => {
+  const { claimId } = req.params;
+  const { status, rejection_reason } = req.body;
+
+  // Validate request body
+  if (!status || !['approved', 'denied'].includes(status)) {
+    return res.status(400).json({ error: 'Status must be "approved" or "denied"' });
+  }
+  if (status === 'denied' && !rejection_reason) {
+    return res.status(400).json({ error: 'Rejection reason is required for denied claims' });
+  }
+
+  try {
+    // Check if the claim exists
+    const claimResult = await pool.query(
+      'SELECT * FROM claims WHERE id = $1',
+      [claimId]
+    );
+    if (claimResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Claim not found' });
+    }
+
+    // Update the claim status
+    const updatedClaim = await pool.query(
+      `UPDATE claims 
+       SET status = $1, approved_by = $2, approved_at = CURRENT_TIMESTAMP, rejection_reason = $3
+       WHERE id = $4
+       RETURNING *`,
+      [status, req.user.id, rejection_reason, claimId]
+    );
+
+    res.status(200).json(updatedClaim.rows[0]);
+  } catch (error) {
+    console.error('Error in /approveClaim:', error);
+    res.status(500).json({ error: 'Failed to update claim status', details: error.message });
+  }
+});
+
+router.get('/pendingClaims', authMiddleware, async (req, res) => {
+  try {
+    const pendingClaims = await pool.query(
+      `SELECT 
+         c.id,
+         c.policy_purchase_id,
+         c.claim_amount,
+         c.claim_date,
+         c.status,
+         c.approved_by,
+         c.approved_at,
+         c.rejection_reason,
+         pp.user_id AS policy_user_id,
+         pp.product_id AS policy_product_id,
+         u.name AS user_name,
+         ip.title AS product_title
+       FROM claims c
+       JOIN policy_purchases pp ON c.policy_purchase_id = pp.id
+       JOIN users u ON pp.user_id = u.id
+       JOIN insurance_products ip ON pp.product_id = ip.id
+       WHERE c.status = 'pending'`
+    );
+
+    console.log('Fetched pending claims:', pendingClaims.rows);
+    res.status(200).json(pendingClaims.rows);
+  } catch (error) {
+    console.error('Error in /pendingClaims:', error);
+    res.status(500).json({ error: 'Failed to fetch pending claims', details: error.message });
   }
 });
 

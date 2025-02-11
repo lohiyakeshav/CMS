@@ -60,6 +60,7 @@ router.get('/pendingPolicies', authMiddleware, async (req, res) => {
 
 // Fetch pending claims
 router.get('/pendingClaims', authMiddleware, async (req, res) => {
+  console.log("Chal raha hai API");
   try {
     const claims = await pool.query(
       'SELECT * FROM claims WHERE status = $1',

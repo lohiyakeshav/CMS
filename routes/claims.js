@@ -313,19 +313,6 @@ router.post('/claimtriggered', authMiddleware, async (req, res) => {
   }
 });
 
-// Fetch claims for a specific user
-router.get('/userClaims', authMiddleware, async (req, res) => {
-  try {
-    const claims = await pool.query(
-      'SELECT * FROM claims WHERE user_id = $1',
-      [req.user.id] // Use req.user.id to fetch claims for the logged-in user
-    );
-    res.json(claims.rows);
-  } catch (error) {
-    console.error('Error in /userClaims:', error);
-    res.status(500).json({ error: 'Failed to fetch claims' });
-  }
-});
 
 router.put('/approveClaim/:claimId', authMiddleware, async (req, res) => {
   const { claimId } = req.params;

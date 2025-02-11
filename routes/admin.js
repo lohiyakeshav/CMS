@@ -1,97 +1,95 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const authenticateToken = require('../middleware/authMiddleware');
-const adminCheck = require('../middleware/adminMiddleware');
+const authMiddleware = require('../middleware/authMiddleware');
 
-// Admin: Get all policyholders
-router.get('/policyholders', authenticateToken, adminCheck, async (req, res) => {
+// Middleware to check admin privileges
+const adminOnly = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin privileges required' });
+  }
+  next();
+};
+
+// Example: Get all users (admin only)
+router.get('/users', authMiddleware, adminOnly, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, email, role, created_at 
-       FROM policyholders 
-       ORDER BY created_at DESC`
+      'SELECT id, name, email, role, created_at FROM users'
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve policyholders' });
+    res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-// Get all insurance products (including unapproved)
-router.get('/products', authenticateToken, adminCheck, async (req, res) => {
+// Other admin routes...
+// For example, approving a policy purchase:
+router.post('/approvePolicy/:policyId', authMiddleware, async (req, res) => {
+  const { policyId } = req.params;
+  const { decision } = req.body; // decision: true (approve) or false (reject)
   try {
-    const result = await pool.query(
-      'SELECT * FROM insurance_products'
+    const status = decision ? 'approved' : 'denied';
+    const policy = await pool.query(
+      'UPDATE policy_purchases SET status = $1, approved_by = $2, approved_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *',
+      [status, req.user.id, policyId]
     );
-    res.json(result.rows);
+    if (policy.rows.length === 0) {
+      return res.status(404).json({ error: 'Policy not found' });
+    }
+    res.json(policy.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error in /approvePolicy:', error);
+    res.status(500).json({ error: 'Failed to update policy status' });
   }
 });
 
-// Admin: Get pending approvals
-router.get('/products/pending', authenticateToken, adminCheck, async (req, res) => {
+// Fetch pending policies
+router.get('/pendingPolicies', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT ip.*, ph.name as submitter_name
-       FROM insurance_products ip
-       JOIN policyholders ph ON ip.created_by = ph.id
-       WHERE ip.is_approved = false`
+    const policies = await pool.query(
+      'SELECT * FROM policy_purchases WHERE status = $1',
+      ['pending']
     );
-    res.json(result.rows);
+    res.json(policies.rows);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve pending products' });
+    console.error('Error in /pendingPolicies:', error);
+    res.status(500).json({ error: 'Failed to fetch pending policies' });
   }
 });
 
-// Admin: Approve insurance product
-router.post('/products/approve/:id', authenticateToken, adminCheck, async (req, res) => {
+// Fetch pending claims
+router.get('/pendingClaims', authMiddleware, async (req, res) => {
   try {
-    const { decision, reason } = req.body;
-    
-    await pool.query('BEGIN');
-    
-    // Update product approval status
-    await pool.query(
-      `UPDATE insurance_products 
-       SET is_approved = $1 
-       WHERE id = $2`,
-      [decision, req.params.id]
+    const claims = await pool.query(
+      'SELECT * FROM claims WHERE status = $1',
+      ['pending']
     );
-    
-    // Record approval decision
-    await pool.query(
-      `INSERT INTO approvals 
-       (product_id, admin_id, decision, reason) 
-       VALUES ($1, $2, $3, $4)`,
-      [req.params.id, req.policyholder.id, decision, reason]
-    );
-    
-    await pool.query('COMMIT');
-    res.json({ 
-      message: `Product ${decision ? 'approved' : 'rejected'}`,
-      productId: req.params.id
-    });
+    res.json(claims.rows);
   } catch (error) {
-    await pool.query('ROLLBACK');
-    res.status(500).json({ error: 'Approval process failed' });
+    console.error('Error in /pendingClaims:', error);
+    res.status(500).json({ error: 'Failed to fetch pending claims' });
   }
 });
 
-// Get all transactions
-router.get('/transactions', authenticateToken, adminCheck, async (req, res) => {
+// Approve or reject a claim
+router.post('/approveClaim/:claimId', authMiddleware, async (req, res) => {
+  const { claimId } = req.params;
+  const { decision, rejection_reason } = req.body; // decision: true (approve) or false (reject)
   try {
-    const result = await pool.query(`
-      SELECT t.*, u.name as user_name, i.title as product_title
-      FROM transactions t
-      JOIN users u ON t.user_id = u.id
-      JOIN insurance_products i ON t.product_id = i.id
-    `);
-    res.json(result.rows);
+    const status = decision ? 'approved' : 'denied';
+    const claim = await pool.query(
+      'UPDATE claims SET status = $1, approved_by = $2, approved_at = CURRENT_TIMESTAMP, rejection_reason = $3 WHERE id = $4 RETURNING *',
+      [status, req.user.id, rejection_reason, claimId]
+    );
+    if (claim.rows.length === 0) {
+      return res.status(404).json({ error: 'Claim not found' });
+    }
+    res.json(claim.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error in /approveClaim:', error);
+    res.status(500).json({ error: 'Failed to update claim status' });
   }
 });
 
-module.exports = router; 
+module.exports = router;

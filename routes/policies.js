@@ -96,6 +96,41 @@ router.get('/', authenticateToken, async (req, res) => {
 
 /**
  * @swagger
+ * /policies:
+ *   get:
+ *     summary: Get all policies for the logged-in user
+ *     tags: [Policies]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of policies
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+// ✅ Get all policies for the logged-in user
+router.get('/myPolicies', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT pp.id, pp.user_id, pp.product_id, pp.purchase_date, pp.valid_until, pp.status, 
+              ip.title, ip.description, ip.coverage_amount, ip.premium, ip.duration
+       FROM policy_purchases pp
+       JOIN insurance_products ip ON pp.product_id = ip.id
+       WHERE pp.user_id = $1`,
+      [req.user.id] // Filter by logged-in user's ID
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error in /myPolicies:', error);
+    res.status(500).json({ error: 'Failed to fetch your policies' });
+  }
+});
+
+/**
+ * @swagger
  * /policies/{id}:
  *   get:
  *     summary: Get a specific policy by ID
@@ -184,4 +219,25 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+router.post('/purchase', authenticateToken, async (req, res) => {
+  try {
+    const { product_id, purchase_date, valid_until } = req.body;
+
+    // Insert the new policy purchase into the database
+    const result = await pool.query(
+      `INSERT INTO policy_purchases (user_id, product_id, purchase_date, valid_until, status)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [req.user.userId, product_id, purchase_date, valid_until, 'pending']
+    );
+
+    // Return the newly purchased policy
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error in /purchase:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
+

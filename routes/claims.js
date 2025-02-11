@@ -1,32 +1,8 @@
-/**
- * @swagger
- * tags:
- *   name: Claims
- *   description: API for managing insurance claims
- */
-
-/**
- * @swagger
- * components:
- *   securitySchemes:
- *     bearerAuth:
- *       type: http
- *       scheme: bearer
- *       bearerFormat: JWT
- */
-
+// claims.js
 const express = require('express');
 const router = express.Router();
-const pool = require('../db'); // Import PostgreSQL connection
-const authenticateToken = require('../middleware/authMiddleware.js'); // Import JWT middleware
-
-const validTransitions = {
-  pending: ['approved', 'denied'],
-  approved: ['paid'],
-  denied: [],
-  paid: []
-};
-
+const pool = require('../db');
+const authMiddleware = require('../middleware/authMiddleware');
 
 /**
  * @swagger
@@ -43,9 +19,9 @@ const validTransitions = {
  *           schema:
  *             type: object
  *             properties:
- *               policyId:
+ *               product_id:
  *                 type: integer
- *               amount:
+ *               claim_amount:
  *                 type: number
  *               description:
  *                 type: string
@@ -57,36 +33,37 @@ const validTransitions = {
  *       401:
  *         description: Unauthorized
  */
+router.post('/', authMiddleware, async (req, res) => {
+  const { product_id, claim_amount } = req.body;
 
-// ✅ Create a Claim (Protected Route)
-router.post('/', authenticateToken, async (req, res) => {
-  const { policyId, amount, description } = req.body;
-
-  // Required fields check
-  if (!policyId || !amount) {
-    return res.status(400).json({ 
-      error: 'Missing required fields: policyId and amount are mandatory' 
-    });
+  // Validate that all required fields are present
+  if (!product_id || !claim_amount) {
+    return res.status(400).json({ error: 'All fields (product_id, claim_amount) are required' });
   }
 
   try {
-    const policy = await pool.query('SELECT * FROM policies WHERE id = $1', [policyId]);
-    if (policy.rows.length === 0) {
-      return res.status(404).json({ error: 'Policy not found' });
+    // Check if the product exists and is approved
+    const productResult = await pool.query(
+      'SELECT * FROM insurance_products WHERE id = $1 AND is_approved = true',
+      [product_id]
+    );
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found or not approved' });
     }
 
-    if (amount > policy.rows[0].amount) {
-      return res.status(400).json({ error: `Claim amount (${amount}) exceeds policy limit (${policy.rows[0].amount})` });
-    }
-
+    // Insert the new claim into the database
     const result = await pool.query(
-      'INSERT INTO claims (policy_id, amount, description) VALUES ($1, $2, $3) RETURNING *',
-      [policyId, amount, description]
+      `INSERT INTO claims (user_id, product_id, claim_amount, status)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [req.user.id, product_id, claim_amount, 'pending'] // Use the userId from the JWT token
     );
 
+    // Return the newly created claim
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error in /claims:', error);
+    res.status(500).json({ error: 'Failed to submit claim' });
   }
 });
 
@@ -123,30 +100,23 @@ router.post('/', authenticateToken, async (req, res) => {
  *       404:
  *         description: Claim not found
  */
-
-// ✅ Update a Claim Status (Protected Route)
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { status } = req.body;
     
-    // First verify ownership
-    const claimCheck = await pool.query(`
-      SELECT c.id 
-      FROM claims c
-      JOIN policies p ON c.policy_id = p.id
-      WHERE c.id = $1 AND p.policyholder_id = $2
-    `, [req.params.id, req.policyholder.id]);
-
+    // Verify claim ownership
+    const claimCheck = await pool.query(
+      'SELECT id FROM claims WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
     if (claimCheck.rows.length === 0) {
       return res.status(403).json({ error: "Access denied" });
     }
 
-    // Proceed with update...
     const result = await pool.query(
-      "UPDATE claims SET status = $1 WHERE id = $2 RETURNING *",
+      'UPDATE claims SET status = $1 WHERE id = $2 RETURNING *',
       [status, req.params.id]
     );
-    
     res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -175,11 +145,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
  *       401:
  *         description: Unauthorized
  */
-
-// ✅ Delete a Claim (Protected Route)
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
-    const claim = await pool.query('DELETE FROM claims WHERE id = $1 RETURNING *', [req.params.id]);
+    const claim = await pool.query(
+      'DELETE FROM claims WHERE id = $1 AND user_id = $2 RETURNING *',
+      [req.params.id, req.user.id]
+    );
     if (claim.rows.length === 0) {
       return res.status(404).json({ error: 'Claim not found' });
     }
@@ -189,12 +160,11 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-
 /**
  * @swagger
  * /claims:
  *   get:
- *     summary: Get all claims
+ *     summary: Get all claims for the authenticated user
  *     tags: [Claims]
  *     security:
  *       - bearerAuth: []
@@ -203,32 +173,24 @@ router.delete('/:id', authenticateToken, async (req, res) => {
  *         description: A list of claims
  *       401:
  *         description: Unauthorized
- *       500:
- *         description: Server error
  */
-
-// ✅ Get All Claims (Protected Route)
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT c.* 
-      FROM claims c
-      JOIN policies p ON c.policy_id = p.id
-      WHERE p.policyholder_id = $1
-    `, [req.policyholder.id]);
-    
+    const result = await pool.query(
+      'SELECT * FROM claims WHERE user_id = $1',
+      [req.user.id]
+    );
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-
 /**
  * @swagger
  * /claims/{id}:
  *   get:
- *     summary: Get a claim by ID
+ *     summary: Get a specific claim by ID
  *     tags: [Claims]
  *     security:
  *       - bearerAuth: []
@@ -245,27 +207,107 @@ router.get('/', authenticateToken, async (req, res) => {
  *         description: Claim not found
  *       401:
  *         description: Unauthorized
- *       500:
- *         description: Server error
  */
-
-// ✅ Get a Single Claim by ID (Protected Route)
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT c.* 
-      FROM claims c
-      JOIN policies p ON c.policy_id = p.id
-      WHERE c.id = $1 AND p.policyholder_id = $2
-    `, [req.params.id, req.policyholder.id]);
-
+    const result = await pool.query(
+      'SELECT * FROM claims WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Claim not found or access denied" });
     }
-    
     res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ Submit a claim for a specific policy
+router.post('/:policyId', authMiddleware, async (req, res) => {
+  const { policyId } = req.params;
+  const { claim_amount } = req.body;
+
+  try {
+    const policyResult = await pool.query(
+      `SELECT * FROM policy_purchases 
+       WHERE id = $1 AND user_id = $2 AND status = 'approved'`,
+      [policyId, req.user.id]
+    );
+
+    if (policyResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Policy not found or not approved' });
+    }
+
+    const claimResult = await pool.query(
+      `INSERT INTO claims 
+        (user_id, product_id, claim_amount, status) 
+       VALUES 
+        ($1, $2, $3, 'pending') 
+       RETURNING *`,
+      [req.user.id, policyResult.rows[0].product_id, claim_amount]
+    );
+
+    res.status(201).json(claimResult.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/submitForClaim', authMiddleware, async (req, res) => {
+  const { policy_purchase_id, claim_amount } = req.body;
+
+  // Validate request body
+  if (!policy_purchase_id || !claim_amount) {
+    return res.status(400).json({ error: 'Policy Purchase ID and claim amount are required' });
+  }
+
+  try {
+    // Check if the policy purchase exists, belongs to the user, and is approved
+    const policyPurchaseResult = await pool.query(
+      `SELECT * FROM policy_purchases 
+       WHERE id = $1 AND user_id = $2 AND status = 'approved'`,
+      [policy_purchase_id, req.user.id]
+    );
+    if (policyPurchaseResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Policy purchase not found, not approved, or does not belong to the user' });
+    }
+
+    // Check if the user has already claimed this policy purchase
+    const existingClaim = await pool.query(
+      'SELECT * FROM claims WHERE policy_purchase_id = $1',
+      [policy_purchase_id]
+    );
+    if (existingClaim.rows.length > 0) {
+      return res.status(400).json({ error: 'You have already claimed this policy purchase' });
+    }
+
+    // Insert the new claim into the database
+    const claim = await pool.query(
+      `INSERT INTO claims (policy_purchase_id, claim_amount, status)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [policy_purchase_id, claim_amount, 'pending']
+    );
+
+    res.status(201).json(claim.rows[0]);
+  } catch (error) {
+    console.error('Error in /submitForClaim:', error);
+    res.status(500).json({ error: 'Failed to submit claim', details: error.message });
+  }
+});
+
+// Fetch claims for a specific user
+router.get('/userClaims', authMiddleware, async (req, res) => {
+  try {
+    const claims = await pool.query(
+      'SELECT * FROM claims WHERE user_id = $1',
+      [req.user.id] // Use req.user.id to fetch claims for the logged-in user
+    );
+    res.json(claims.rows);
+  } catch (error) {
+    console.error('Error in /userClaims:', error);
+    res.status(500).json({ error: 'Failed to fetch claims' });
   }
 });
 

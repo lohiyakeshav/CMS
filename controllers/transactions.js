@@ -5,9 +5,9 @@ const getTransactionHistory = async (req) => {
               ip.title AS product_title
        FROM transactions t
        JOIN insurance_products ip ON t.product_id = ip.id
-       WHERE t.policyholder_id = $1
+       WHERE t.user_id = $1
        ORDER BY t.transaction_date DESC`,
-      [req.policyholder.id]
+      [req.user.id]
     );
     return result.rows;
   } catch (error) {

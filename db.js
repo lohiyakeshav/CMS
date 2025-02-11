@@ -6,9 +6,9 @@ const pool = new Pool({
   ssl: {
     rejectUnauthorized: false, // Allow self-signed certificates (required for cloud-hosted databases)
   },
-  max: 10, // Prevent connection overload
-  idleTimeoutMillis: 30000, // Close idle connections after 30s
-  connectionTimeoutMillis: 2000, // Prevent infinite waiting
+  max: 20, // Increase the maximum number of clients in the pool
+  idleTimeoutMillis: 30000, // Increase the idle timeout to 30 seconds
+  connectionTimeoutMillis: 10000, // Increase the connection timeout to 10 seconds
 });
 
 // Ensure the pool is closed after tests

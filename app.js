@@ -1,82 +1,89 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const swaggerJsDoc = require("swagger-jsdoc");
-const swaggerUi = require("swagger-ui-express");
-const authenticateToken = require("./middleware/authMiddleware");
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const dotenv = require('dotenv');
+const pool = require('./db');
+const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
+const policiesRoutes = require('./routes/policies');
+const claimsRoutes = require('./routes/claims');
 
+// Load environment variables
+dotenv.config();
+
+// Initialize Express app
 const app = express();
 
 // Middleware
-app.use(express.json());
 app.use(cors());
+app.use(helmet());
+app.use(express.json());
 
-// Swagger Configuration
-const swaggerOptions = {
-  definition: {
-    openapi: "3.0.0",
-    info: {
-      title: "Claims Management API",
-      version: "1.0.0",
-      description: "API documentation for the Claims Management System",
-    },
-    servers: [
-      {
-        url: "https://cms-2m4x.onrender.com",  // Cloud URL
-      },
-    ],
-  },
-  apis: ["./routes/*.js"], // Path to the API docs
-};
+// Logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
 
-const swaggerDocs = swaggerJsDoc(swaggerOptions);
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+  // Log the request
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
 
-// Public routes
-const authRoutes = require("./routes/auth");
-app.use("/auth", authRoutes);
+  // Log the response status and time taken
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - ${res.statusCode} (${duration}ms)`);
+  });
 
-// Protected routes
-const policyholderRoutes = require("./routes/policyholders");
-const policyRoutes = require("./routes/policies");
-const claimRoutes = require("./routes/claims");
-
-app.use("/policyholders", authenticateToken, policyholderRoutes);
-app.use("/policies", authenticateToken, policyRoutes);
-app.use("/claims", authenticateToken, claimRoutes);
-
-// Test Route
-app.get("/", (req, res) => {
-  res.send("Claims Management System API is running!");
+  next();
 });
 
-// Database connection
-const { Pool } = require("pg");
-
-// Use cloud database URL from environment variable
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,  // Ensure DATABASE_URL is set in .env
-  ssl: {
-    rejectUnauthorized: false,  // For cloud SSL connections
-  },
+// Test route
+app.get('/', (req, res) => {
+  res.send('Server is running!');
 });
 
-pool.query("SELECT NOW()", (err, res) => {
+// Routes
+const usersRouter = require('./routes/users');
+const productsRouter = require('./routes/products');
+const adminRouter = require('./routes/admin');
+const transactionsRouter = require('./routes/transactions');
+
+const purchasePolicyRouter = require('./routes/policyPurchase');
+const policiesRouter = require('./routes/policies');
+const claimsRouter = require('./routes/claims');
+
+app.use('/api/policyPurchase', purchasePolicyRouter);
+app.use('/api/policies', policiesRouter);
+app.use('/api/claims', claimsRouter);
+
+app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRouter);
+app.use('/api/products', productsRouter);
+app.use('/api/admin', adminRoutes);
+app.use('/api/transactions', transactionsRouter);
+
+// Test database connection
+pool.query('SELECT NOW()', (err, res) => {
   if (err) {
-    console.error("Database connection error", err);
+    console.error('Error connecting to the database:', err);
   } else {
-    console.log("Connected to PostgreSQL:", res.rows[0]);
+    console.log('Database connection successful:', res.rows[0].now);
   }
 });
 
-// Server setup
-if (process.env.NODE_ENV !== "test") {
-  const PORT =  3000;
-  const server = app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-    console.log(`Swagger docs available at https://cms-2m4x.onrender.com/api-docs`);
-  });
-  module.exports = { app, server };
-} else {
-  module.exports = { app };
-}
+// 404 Handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
+
+// Error Handler
+app.use((err, req, res, next) => {
+  console.error(`[${new Date().toISOString()}] Error: ${err.message}`);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
+
+

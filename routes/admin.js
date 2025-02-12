@@ -60,7 +60,7 @@ router.post('/approvePolicy/:policyId', authMiddleware, adminOnly, async (req, r
         await sendEmail(
           userEmail,
           subject,
-          decision ? 'policyApproved' : 'policyRejected',
+          decision ? 'policy_approved' : 'policy_rejected',
           {
             policyId,
             status: decision ? 'approved' : 'rejected',
@@ -137,7 +137,7 @@ router.post('/approveClaim/:claimId', authMiddleware, adminOnly, async (req, res
     // 3. Send notification if email exists
     if (userEmail) {
       const subject = decision ? 'Claim Approved' : 'Claim Rejected';
-      const template = decision ? 'claimApproved' : 'claimRejected';
+      const template = decision ? 'claim_approved' : 'claim_rejected';
       
       try {
         await sendEmail(userEmail, subject, template, {

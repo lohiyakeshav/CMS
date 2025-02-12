@@ -40,7 +40,7 @@ router.post('/approvePolicy/:policyId', authMiddleware, adminOnly, async (req, r
     const { decision } = req.body;
 
     // 1. Update policy status
-    const newStatus = decision ? 'approved' : 'rejected';
+    const newStatus = decision ? 'approved' : 'denied';
     await pool.query(
       'UPDATE policy_purchases SET status = $1 WHERE id = $2',
       [newStatus, policyId]
@@ -118,7 +118,7 @@ router.post('/approveClaim/:claimId', authMiddleware, adminOnly, async (req, res
     const { decision, rejection_reason } = req.body;
 
     // 1. Update claim status
-    const newStatus = decision ? 'approved' : 'rejected';
+    const newStatus = decision ? 'approved' : 'denied';
     await pool.query(
       'UPDATE claims SET status = $1, rejection_reason = $2 WHERE id = $3',
       [newStatus, rejection_reason || null, claimId]

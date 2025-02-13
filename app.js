@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const policiesRoutes = require('./routes/policies');
 const claimsRoutes = require('./routes/claims');
+const prometheusMiddleware = require('express-prometheus-middleware');
 
 // Load environment variables
 dotenv.config();
@@ -19,6 +20,18 @@ const app = express();
 app.use(cors());
 app.use(helmet());
 app.use(express.json());
+
+// Monitoring Middleware
+app.use(
+  prometheusMiddleware({
+    metricsPath: '/metrics',
+    collectDefaultMetrics: true,
+    requestDurationBuckets: [0.1, 0.5, 1, 1.5], // Customize latency buckets
+    requestSizeBuckets: [100, 1000, 5000],
+    responseSizeBuckets: [100, 1000, 5000],
+  })
+);
+
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -85,6 +98,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Prometheus metrics available at http://localhost:${PORT}/metrics`);
 });
 
 

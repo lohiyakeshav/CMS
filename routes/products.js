@@ -6,13 +6,32 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 /**
  * @swagger
- * /products:
+ * /api/products:
  *   get:
  *     summary: Get all approved insurance products
  *     tags: [Products]
  *     responses:
  *       200:
  *         description: A list of approved products
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   title:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *                   coverage_amount:
+ *                     type: number
+ *                   premium:
+ *                     type: number
+ *                   duration:
+ *                     type: integer
  *       500:
  *         description: Failed to fetch products
  */
@@ -32,7 +51,7 @@ router.get('/', async (req, res) => {
 
 /**
  * @swagger
- * /products:
+ * /api/products:
  *   post:
  *     summary: Submit a new insurance product
  *     tags: [Products]
@@ -53,18 +72,26 @@ router.get('/', async (req, res) => {
  *             properties:
  *               title:
  *                 type: string
+ *                 example: "Home Insurance Premium"
  *               description:
  *                 type: string
+ *                 example: "Comprehensive home insurance coverage"
  *               coverage_amount:
  *                 type: number
+ *                 example: 1000000
  *               premium:
  *                 type: number
+ *                 example: 1500
  *               duration:
  *                 type: integer
- *                 description: Duration in months (0 for lifetime)
+ *                 example: 12
  *     responses:
  *       201:
  *         description: Product submitted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
  *       400:
  *         description: Missing required fields
  *       500:
@@ -89,79 +116,88 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /products/mine:
- *   get:
- *     summary: Get all products submitted by the authenticated user
- *     tags: [Products]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: A list of your products
- *       500:
- *         description: Failed to fetch your products
- */
-router.get('/mine', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM insurance_products WHERE created_by = $1 ORDER BY created_at DESC',
-      [req.user.id]
-    );
-    res.json(result.rows);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch your products' });
-  }
-});
+// /**
+//  * @swagger
+//  * /products/mine:
+//  *   get:
+//  *     summary: Get all products submitted by the authenticated user
+//  *     tags: [Products]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of your products
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *       500:
+//  *         description: Failed to fetch your products
+//  */
+// router.get('/mine', authMiddleware, async (req, res) => {
+//   try {
+//     const result = await pool.query(
+//       'SELECT * FROM insurance_products WHERE created_by = $1 ORDER BY created_at DESC',
+//       [req.user.id]
+//     );
+//     res.json(result.rows);
+//   } catch (error) {
+//     res.status(500).json({ error: 'Failed to fetch your products' });
+//   }
+// });
+
+// /**
+//  * @swagger
+//  * /products/{id}:
+//  *   get:
+//  *     summary: Get details of a specific product
+//  *     tags: [Products]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: integer
+//  *         description: The ID of the product to retrieve.
+//  *     responses:
+//  *       200:
+//  *         description: Product details
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *       403:
+//  *         description: Access denied (if product is unapproved and the requester isn't the creator/admin)
+//  *       404:
+//  *         description: Product not found
+//  *       500:
+//  *         description: Failed to fetch product
+//  */
+// router.get('/:id', authMiddleware, async (req, res) => {
+//   try {
+//     const result = await pool.query(
+//       'SELECT * FROM insurance_products WHERE id = $1',
+//       [req.params.id]
+//     );
+//     if (result.rows.length === 0) {
+//       return res.status(404).json({ error: 'Product not found' });
+//     }
+//     const product = result.rows[0];
+//     // If the product is unapproved, only the creator or an admin may view it
+//     if (!product.is_approved && product.created_by !== req.user.id && req.user.role !== 'admin') {
+//       return res.status(403).json({ error: 'Access denied' });
+//     }
+//     res.json(product);
+//   } catch (error) {
+//     res.status(500).json({ error: 'Failed to fetch product' });
+//   }
+// });
 
 /**
  * @swagger
- * /products/{id}:
- *   get:
- *     summary: Get details of a specific product
- *     tags: [Products]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Product details
- *       403:
- *         description: Access denied (if product is unapproved and the requester isn't the creator/admin)
- *       404:
- *         description: Product not found
- *       500:
- *         description: Failed to fetch product
- */
-router.get('/:id', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM insurance_products WHERE id = $1',
-      [req.params.id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Product not found' });
-    }
-    const product = result.rows[0];
-    // If the product is unapproved, only the creator or an admin may view it
-    if (!product.is_approved && product.created_by !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-    res.json(product);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch product' });
-  }
-});
-
-/**
- * @swagger
- * /products/{id}:
+ * /api/products/{id}:
  *   delete:
  *     summary: Delete a product (only allowed for the creator or an admin)
  *     tags: [Products]
@@ -173,6 +209,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
  *         required: true
  *         schema:
  *           type: integer
+ *         description: The ID of the product to delete.
  *     responses:
  *       204:
  *         description: Product deleted successfully
@@ -203,41 +240,48 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /products/buy:
- *   post:
- *     summary: Buy a product (create a policy)
- *     tags: [Products]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - productId
- *               - startDate
- *               - endDate
- *             properties:
- *               productId:
- *                 type: integer
- *               startDate:
- *                 type: string
- *               endDate:
- *                 type: string
- *     responses:
- *       201:
- *         description: Policy purchased successfully
- *       400:
- *         description: Missing required fields
- *       404:
- *         description: Product not found or not approved
- *       500:
- *         description: Failed to purchase product
- */
+// /**
+//  * @swagger
+//  * /products/buy:
+//  *   post:
+//  *     summary: Buy a product (create a policy)
+//  *     tags: [Products]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             required:
+//  *               - productId
+//  *               - startDate
+//  *               - endDate
+//  *             properties:
+//  *               productId:
+//  *                 type: integer
+//  *                 example: 123
+//  *               startDate:
+//  *                 type: string
+//  *                 example: "2025-01-01"
+//  *               endDate:
+//  *                 type: string
+//  *                 example: "2025-12-31"
+//  *     responses:
+//  *       201:
+//  *         description: Policy purchased successfully
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *       400:
+//  *         description: Missing required fields
+//  *       404:
+//  *         description: Product not found or not approved
+//  *       500:
+//  *         description: Failed to purchase product
+//  */
 router.post('/buy', authMiddleware, async (req, res) => {
   const { productId, startDate, endDate } = req.body;
 
@@ -261,7 +305,7 @@ router.post('/buy', authMiddleware, async (req, res) => {
       `INSERT INTO policy_purchases (user_id, product_id, purchase_date, valid_until, status)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [req.user.id, productId, startDate, endDate, 'pending'] // Use the userId from the JWT token
+      [req.user.id, productId, startDate, endDate, 'pending']
     );
 
     // Return the newly purchased policy
@@ -272,20 +316,24 @@ router.post('/buy', authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /products/myPolicies:
- *   get:
- *     summary: Get all products purchased by the authenticated user with their status
- *     tags: [Products]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: A list of your products with their status
- *       500:
- *         description: Failed to fetch your policies
- */
+// /**
+//  * @swagger
+//  * /products/myPolicies:
+//  *   get:
+//  *     summary: Get all products purchased by the authenticated user with their status
+//  *     tags: [Products]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of your products with their status
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *       500:
+//  *         description: Failed to fetch your policies
+//  */
 router.get('/myPolicies', authMiddleware, async (req, res) => {
   try {
     // Fetch products associated with the logged-in user's policies
@@ -296,8 +344,6 @@ router.get('/myPolicies', authMiddleware, async (req, res) => {
        WHERE pp.user_id = $1`,
       [req.user.id]
     );
-
-    // Return the user's products with their status
     res.json(result.rows);
   } catch (error) {
     console.error('Error in /myPolicies:', error);
@@ -305,41 +351,46 @@ router.get('/myPolicies', authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /products/buyProduct:
- *   post:
- *     summary: Buy a product (create a policy)
- *     tags: [Products]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - product_id
- *             properties:
- *               product_id:
- *                 type: integer
- *     responses:
- *       201:
- *         description: Policy purchased successfully
- *       400:
- *         description: Missing required fields
- *       404:
- *         description: Product not found or not approved
- *       500:
- *         description: Failed to purchase product
- */
+// /**
+//  * @swagger
+//  * /products/buyProduct:
+//  *   post:
+//  *     summary: Buy a product (create a policy)
+//  *     tags: [Products]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             required:
+//  *               - product_id
+//  *             properties:
+//  *               product_id:
+//  *                 type: integer
+//  *                 example: 123
+//  *     responses:
+//  *       201:
+//  *         description: Policy purchased successfully
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *       400:
+//  *         description: Missing required fields
+//  *       404:
+//  *         description: Product not found or not approved
+//  *       500:
+//  *         description: Failed to purchase product
+//  */
 router.post('/buyProduct', authMiddleware, async (req, res) => {
   const { product_id } = req.body;
   try {
     const purchase = await pool.query(
       'INSERT INTO policy_purchases (user_id, product_id) VALUES ($1, $2) RETURNING *',
-      [req.user.id, product_id] // Use req.user.id
+      [req.user.id, product_id]
     );
     res.json(purchase.rows[0]);
   } catch (error) {
@@ -347,5 +398,90 @@ router.post('/buyProduct', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Failed to purchase product' });
   }
 });
+
+
+
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   put:
+ *     summary: Update an insurance product (Admin only)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The ID of the product to update.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               coverage_amount:
+ *                 type: number
+ *               premium:
+ *                 type: number
+ *               duration:
+ *                 type: integer
+ *               is_approved:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Product updated successfully
+ *       400:
+ *         description: Invalid request body
+ *       403:
+ *         description: Access denied (Only admin can update products)
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Failed to update product
+ */
+router.put('/:id', authMiddleware, async (req, res) => {
+  const { title, description, coverage_amount, premium, duration, is_approved } = req.body;
+  
+  // Ensure only admins can update products
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  try {
+    // Check if the product exists
+    const productResult = await pool.query('SELECT * FROM insurance_products WHERE id = $1', [req.params.id]);
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    // Update the product details
+    const result = await pool.query(
+      `UPDATE insurance_products 
+       SET title = COALESCE($1, title),
+           description = COALESCE($2, description),
+           coverage_amount = COALESCE($3, coverage_amount),
+           premium = COALESCE($4, premium),
+           duration = COALESCE($5, duration),
+           is_approved = COALESCE($6, is_approved)
+       WHERE id = $7 
+       RETURNING *`,
+      [title, description, coverage_amount, premium, duration, is_approved, req.params.id]
+    );
+
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({ error: 'Failed to update product' });
+  }
+});
+
 
 module.exports = router;

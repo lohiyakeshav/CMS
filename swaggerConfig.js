@@ -15,6 +15,15 @@ const options = {
         description: "Local server",
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT"
+        }
+      }
+    }
   },
   apis: ["./routes/*.js"], // Path to API route files
 };
@@ -25,4 +34,4 @@ const setupSwagger = (app) => {
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 };
 
-module.exports = setupSwagger;
+module.exports = { setupSwagger };

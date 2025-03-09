@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,6 +8,11 @@ const adminRoutes = require('./routes/admin');
 const policiesRoutes = require('./routes/policies');
 const claimsRoutes = require('./routes/claims');
 const prometheusMiddleware = require('express-prometheus-middleware');
+const { setupSwagger } = require('./swaggerConfig');
+
+const claimsCRUD = require('./routes/claimsCRUD');
+
+
 
 // Load environment variables
 dotenv.config();
@@ -31,7 +35,6 @@ app.use(
     responseSizeBuckets: [100, 1000, 5000],
   })
 );
-
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -64,6 +67,10 @@ const purchasePolicyRouter = require('./routes/policyPurchase');
 const policiesRouter = require('./routes/policies');
 const claimsRouter = require('./routes/claims');
 
+// Add this after middleware but BEFORE routes
+setupSwagger(app);
+
+// Then add your routes
 app.use('/api/policyPurchase', purchasePolicyRouter);
 app.use('/api/policies', policiesRouter);
 app.use('/api/claims', claimsRouter);
@@ -74,14 +81,16 @@ app.use('/api/products', productsRouter);
 app.use('/api/admin', adminRoutes);
 app.use('/api/transactions', transactionsRouter);
 
-// Test database connection
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('Error connecting to the database:', err);
-  } else {
-    console.log('Database connection successful:', res.rows[0].now);
-  }
-});
+app.use('/claimsCRUD', claimsCRUD);
+
+// // Test database connection
+// pool.query('SELECT NOW()', (err, res) => {
+//   if (err) {
+//     console.error('Error connecting to the database:', err);
+//   } else {
+//     console.log('Database connection successful:', res.rows[0].now);
+//   }
+// });
 
 // 404 Handler
 app.use((req, res) => {
@@ -95,10 +104,14 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+if (process.env.NODE_ENV !== 'test') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Swagger is running on http://localhost:${PORT}/api-docs`);
   console.log(`Prometheus metrics available at http://localhost:${PORT}/metrics`);
-});
+
+  });
+}
 
 

@@ -1,51 +1,58 @@
-/**
- * @swagger
- * tags:
- *   name: Policies
- *   description: API for managing insurance policies
- */
-
+// /**
+//  * @swagger
+//  * tags:
+//  *   name: Policies
+//  *   description: API for managing insurance policies
+//  */
 
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const authenticateToken = require('../middleware/authMiddleware');
 
-/**
- * @swagger
- * /policies:
- *   post:
- *     summary: Create a new policy
- *     tags: [Policies]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               type:
- *                 type: string
- *               amount:
- *                 type: number
- *               startDate:
- *                 type: string
- *                 format: date
- *               endDate:
- *                 type: string
- *                 format: date
- *     responses:
- *       201:
- *         description: Policy created successfully
- *       400:
- *         description: Invalid input
- *       401:
- *         description: Unauthorized
- */
-
-// ✅ Create Policy (Protected)
+// /**
+//  * @swagger
+//  * /policies:
+//  *   post:
+//  *     summary: Create a new policy
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               type:
+//  *                 type: string
+//  *                 example: "Comprehensive"
+//  *               amount:
+//  *                 type: number
+//  *                 example: 10000
+//  *               startDate:
+//  *                 type: string
+//  *                 format: date
+//  *                 example: "2025-01-01"
+//  *               endDate:
+//  *                 type: string
+//  *                 format: date
+//  *                 example: "2025-12-31"
+//  *     responses:
+//  *       201:
+//  *         description: Policy created successfully
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *       400:
+//  *         description: Invalid input
+//  *       401:
+//  *         description: Unauthorized
+//  *       500:
+//  *         description: Server error
+//  */
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { type, amount, start_date, end_date } = req.body;
@@ -55,7 +62,7 @@ router.post('/', authenticateToken, async (req, res) => {
       (type, amount, policyholder_id, start_date, end_date) 
       VALUES ($1, $2, $3, $4, $5) 
       RETURNING *`,
-      [type, amount, req.policyholder.id, start_date, end_date] // Use authenticated ID
+      [type, amount, req.policyholder.id, start_date, end_date] // Use authenticated policyholder ID
     );
     
     res.status(201).json(result.rows[0]);
@@ -64,24 +71,28 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /policies:
- *   get:
- *     summary: Get all policies
- *     tags: [Policies]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: A list of policies
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Server error
- */
-
-// ✅ Get all policies (Protected)
+// /**
+//  * @swagger
+//  * /policies:
+//  *   get:
+//  *     summary: Get all policies for the authenticated policyholder
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of policies
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *               items:
+//  *                 type: object
+//  *       401:
+//  *         description: Unauthorized
+//  *       500:
+//  *         description: Server error
+//  */
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
@@ -94,24 +105,26 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /policies:
- *   get:
- *     summary: Get all policies for the logged-in user
- *     tags: [Policies]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: A list of policies
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Server error
- */
-
-// ✅ Get all policies for the logged-in user
+// /**
+//  * @swagger
+//  * /policies/myPolicies:
+//  *   get:
+//  *     summary: Get all policies for the logged-in user with purchase and claim details
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of policies with related purchase and claim information
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *       401:
+//  *         description: Unauthorized
+//  *       500:
+//  *         description: Server error
+//  */
 router.get('/myPolicies', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
@@ -136,33 +149,35 @@ router.get('/myPolicies', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /policies/{id}:
- *   get:
- *     summary: Get a specific policy by ID
- *     tags: [Policies]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Policy details
- *       404:
- *         description: Policy not found
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Server error
- */
-
-
-// ✅ Get specific policy (Protected)
+// /**
+//  * @swagger
+//  * /policies/{id}:
+//  *   get:
+//  *     summary: Get a specific policy by ID
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: integer
+//  *         description: The ID of the policy to retrieve.
+//  *     responses:
+//  *       200:
+//  *         description: Policy details
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *       404:
+//  *         description: Policy not found or access denied
+//  *       401:
+//  *         description: Unauthorized
+//  *       500:
+//  *         description: Server error
+//  */
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
@@ -180,33 +195,32 @@ router.get('/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-/**
- * @swagger
- * /policies/{id}:
- *   delete:
- *     summary: Delete a policy
- *     tags: [Policies]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       204:
- *         description: Policy deleted successfully
- *       404:
- *         description: Policy not found
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Server error
- */
 
-
-// ✅ Delete Policy (Protected)
+// /**
+//  * @swagger
+//  * /policies/{id}:
+//  *   delete:
+//  *     summary: Delete a policy
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: integer
+//  *         description: The ID of the policy to delete.
+//  *     responses:
+//  *       204:
+//  *         description: Policy deleted successfully
+//  *       404:
+//  *         description: Policy not found
+//  *       401:
+//  *         description: Unauthorized
+//  *       500:
+//  *         description: Server error
+//  */
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     // First verify ownership
@@ -226,6 +240,42 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// /**
+//  * @swagger
+//  * /policies/purchase:
+//  *   post:
+//  *     summary: Purchase a policy product
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               product_id:
+//  *                 type: integer
+//  *                 example: 1
+//  *               purchase_date:
+//  *                 type: string
+//  *                 format: date-time
+//  *                 example: "2025-01-01T00:00:00Z"
+//  *               valid_until:
+//  *                 type: string
+//  *                 format: date-time
+//  *                 example: "2026-01-01T00:00:00Z"
+//  *     responses:
+//  *       201:
+//  *         description: Policy purchased successfully
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *       500:
+//  *         description: Server error
+//  */
 router.post('/purchase', authenticateToken, async (req, res) => {
   try {
     const { product_id, purchase_date, valid_until } = req.body;
@@ -247,4 +297,3 @@ router.post('/purchase', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-

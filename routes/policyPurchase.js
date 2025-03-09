@@ -4,8 +4,80 @@ const router = express.Router();
 const pool = require('../db');
 const authenticateToken = require('../middleware/authMiddleware');
 
-// POST /api/policyPurchase/buy
-// Purchase a new policy (create a record in policy_purchases)
+// /**
+//  * @swagger
+//  * /api/policyPurchase/buy:
+//  *   post:
+//  *     summary: Purchase a new insurance policy
+//  *     tags: [Policy Purchases]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             required:
+//  *               - productId
+//  *               - startDate
+//  *               - endDate
+//  *             properties:
+//  *               productId:
+//  *                 type: integer
+//  *                 example: 123
+//  *               medicalHistory:
+//  *                 type: string
+//  *                 example: "No pre-existing conditions"
+//  *               age:
+//  *                 type: integer
+//  *                 example: 30
+//  *               startDate:
+//  *                 type: string
+//  *                 format: date
+//  *                 example: "2025-01-01"
+//  *               endDate:
+//  *                 type: string
+//  *                 format: date
+//  *                 example: "2026-01-01"
+//  *     responses:
+//  *       201:
+//  *         description: Policy purchased successfully
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 id:
+//  *                   type: integer
+//  *                   example: 1
+//  *                 user_id:
+//  *                   type: integer
+//  *                   example: 45
+//  *                 product_id:
+//  *                   type: integer
+//  *                   example: 123
+//  *                 purchase_date:
+//  *                   type: string
+//  *                   format: date
+//  *                   example: "2025-04-01"
+//  *                 valid_until:
+//  *                   type: string
+//  *                   format: date
+//  *                   example: "2026-01-01"
+//  *                 status:
+//  *                   type: string
+//  *                   example: "pending"
+//  *                 payment_status:
+//  *                   type: string
+//  *                   example: "pending"
+//  *       400:
+//  *         description: Missing required fields
+//  *       404:
+//  *         description: Product not found
+//  *       500:
+//  *         description: Server error
+//  */
 router.post('/buy', authenticateToken, async (req, res) => {
   const { productId, medicalHistory, age, startDate, endDate } = req.body;
 
@@ -44,6 +116,50 @@ router.post('/buy', authenticateToken, async (req, res) => {
   }
 });
 
+// /**
+//  * @swagger
+//  * /api/policyPurchase/getPurchases:
+//  *   get:
+//  *     summary: Get all policy purchases for the authenticated user
+//  *     tags: [Policy Purchases]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of policy purchases
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *               items:
+//  *                 type: object
+//  *                 properties:
+//  *                   id:
+//  *                     type: integer
+//  *                     example: 1
+//  *                   user_id:
+//  *                     type: integer
+//  *                     example: 45
+//  *                   product_id:
+//  *                     type: integer
+//  *                     example: 123
+//  *                   purchase_date:
+//  *                     type: string
+//  *                     format: date
+//  *                     example: "2025-04-01"
+//  *                   valid_until:
+//  *                     type: string
+//  *                     format: date
+//  *                     example: "2026-01-01"
+//  *                   status:
+//  *                     type: string
+//  *                     example: "pending"
+//  *                   payment_status:
+//  *                     type: string
+//  *                     example: "pending"
+//  *       500:
+//  *         description: Server error
+//  */
 router.get('/getPurchases', authenticateToken, async (req, res) => {
   try {
     const purchases = await pool.query(

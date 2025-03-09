@@ -1,10 +1,239 @@
+// /**
+//  * @swagger
+//  * components:
+//  *   schemas:
+//  *     User:
+//  *       type: object
+//  *       properties:
+//  *         id:
+//  *           type: integer
+//  *         name:
+//  *           type: string
+//  *         email:
+//  *           type: string
+//  *           format: email
+//  *         role:
+//  *           type: string
+//  *         created_at:
+//  *           type: string
+//  *           format: date-time
+//  *       example:
+//  *         id: 1
+//  *         name: Jane Doe
+//  *         email: jane.doe@example.com
+//  *         role: admin
+//  *         created_at: "2025-01-01T12:00:00Z"
+//  * 
+//  *     PolicyPurchase:
+//  *       type: object
+//  *       properties:
+//  *         id:
+//  *           type: integer
+//  *         user_id:
+//  *           type: integer
+//  *         status:
+//  *           type: string
+//  *           enum: [pending, approved, denied]
+//  *         created_at:
+//  *           type: string
+//  *           format: date-time
+//  *       example:
+//  *         id: 101
+//  *         user_id: 1
+//  *         status: pending
+//  *         created_at: "2025-02-01T10:00:00Z"
+//  * 
+//  *     Claim:
+//  *       type: object
+//  *       properties:
+//  *         id:
+//  *           type: integer
+//  *         policy_purchase_id:
+//  *           type: integer
+//  *         status:
+//  *           type: string
+//  *           enum: [pending, approved, denied]
+//  *         rejection_reason:
+//  *           type: string
+//  *           nullable: true
+//  *         user_id:
+//  *           type: integer
+//  *         email:
+//  *           type: string
+//  *           format: email
+//  *         created_at:
+//  *           type: string
+//  *           format: date-time
+//  *       example:
+//  *         id: 201
+//  *         policy_purchase_id: 101
+//  *         status: pending
+//  *         rejection_reason: null
+//  *         user_id: 1
+//  *         email: jane.doe@example.com
+//  *         created_at: "2025-02-10T14:00:00Z"
+//  *
+//  *   securitySchemes:
+//  *     bearerAuth:
+//  *       type: http
+//  *       scheme: bearer
+//  *       bearerFormat: JWT
+//  *
+//  * api/admin/users:
+//  *   get:
+//  *     summary: Get all users (admin only)
+//  *     tags: [Admin]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of users.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *               items:
+//  *                 $ref: '#/components/schemas/User'
+//  *       403:
+//  *         description: Forbidden – Admin privileges required.
+//  *       500:
+//  *         description: Failed to fetch users.
+//  *
+//  * api/pendingPolicies:
+//  *   get:
+//  *     summary: Fetch pending policy purchases
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of pending policy purchases.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *               items:
+//  *                 $ref: '#/components/schemas/PolicyPurchase'
+//  *       500:
+//  *         description: Failed to fetch pending policies.
+//  *
+//  * /approvePolicy/{policyId}:
+//  *   post:
+//  *     summary: Approve or reject a policy purchase (admin only)
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: policyId
+//  *         schema:
+//  *           type: integer
+//  *         required: true
+//  *         description: The ID of the policy purchase.
+//  *     requestBody:
+//  *       description: Payload containing the decision.
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               decision:
+//  *                 type: boolean
+//  *                 description: Set to true to approve, false to reject.
+//  *             required:
+//  *               - decision
+//  *     responses:
+//  *       200:
+//  *         description: Policy status updated.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 success:
+//  *                   type: boolean
+//  *                 message:
+//  *                   type: string
+//  *       403:
+//  *         description: Forbidden – Admin privileges required.
+//  *       500:
+//  *         description: Failed to process policy decision.
+//  *
+//  * /pendingClaims:
+//  *   get:
+//  *     summary: Fetch pending claims
+//  *     tags: [Claims]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of pending claims.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *               items:
+//  *                 $ref: '#/components/schemas/Claim'
+//  *       500:
+//  *         description: Failed to fetch pending claims.
+//  *
+//  * /approveClaim/{claimId}:
+//  *   post:
+//  *     summary: Approve or reject a claim (admin only)
+//  *     tags: [Claims]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: claimId
+//  *         schema:
+//  *           type: integer
+//  *         required: true
+//  *         description: The ID of the claim.
+//  *     requestBody:
+//  *       description: Payload containing the decision and optional rejection reason.
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               decision:
+//  *                 type: boolean
+//  *                 description: Set to true to approve, false to reject.
+//  *               rejection_reason:
+//  *                 type: string
+//  *                 description: Optional reason for rejection.
+//  *             required:
+//  *               - decision
+//  *     responses:
+//  *       200:
+//  *         description: Claim status updated.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 success:
+//  *                   type: boolean
+//  *                 message:
+//  *                   type: string
+//  *       403:
+//  *         description: Forbidden – Admin privileges required.
+//  *       500:
+//  *         description: Failed to process claim decision.
+//  */
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { sendEmail } = require('../mail');
 
-// Middleware to check admin privileges
+/**
+ * Middleware to check admin privileges.
+ */
 const adminOnly = (req, res, next) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Admin privileges required' });
@@ -12,7 +241,28 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-// Example: Get all users (admin only)
+// /**
+//  * @swagger
+//  * /users:
+//  *   get:
+//  *     summary: Get all users (admin only)
+//  *     tags: [Admin]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of users.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *               items:
+//  *                 $ref: '#/components/schemas/User'
+//  *       403:
+//  *         description: Forbidden – Admin privileges required.
+//  *       500:
+//  *         description: Failed to fetch users.
+//  */
 router.get('/users', authMiddleware, adminOnly, async (req, res) => {
   try {
     const result = await pool.query(
@@ -24,7 +274,12 @@ router.get('/users', authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
-// Utility function to get user email with role check
+/**
+ * Utility function to get user email with role check.
+ *
+ * @param {number} userId - The user ID.
+ * @returns {Promise<string|undefined>} The user's email if found.
+ */
 const getRecipientEmail = async (userId) => {
   const result = await pool.query(
     'SELECT email FROM users WHERE id = $1 AND role = $2',
@@ -33,7 +288,51 @@ const getRecipientEmail = async (userId) => {
   return result.rows[0]?.email;
 };
 
-// Approve/Reject Policy
+// /**
+//  * @swagger
+//  * /approvePolicy/{policyId}:
+//  *   post:
+//  *     summary: Approve or reject a policy purchase (admin only)
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: policyId
+//  *         schema:
+//  *           type: integer
+//  *         required: true
+//  *         description: The ID of the policy purchase.
+//  *     requestBody:
+//  *       description: Payload containing the decision.
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               decision:
+//  *                 type: boolean
+//  *                 description: Set to true to approve, false to reject.
+//  *             required:
+//  *               - decision
+//  *     responses:
+//  *       200:
+//  *         description: Policy status updated.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 success:
+//  *                   type: boolean
+//  *                 message:
+//  *                   type: string
+//  *       403:
+//  *         description: Forbidden – Admin privileges required.
+//  *       500:
+//  *         description: Failed to process policy decision.
+//  */
 router.post('/approvePolicy/:policyId', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { policyId } = req.params;
@@ -73,14 +372,32 @@ router.post('/approvePolicy/:policyId', authMiddleware, adminOnly, async (req, r
     }
 
     res.json({ success: true, message: `Policy ${newStatus}` });
-
   } catch (error) {
     console.error('Policy approval error:', error);
     res.status(500).json({ error: 'Failed to process policy decision' });
   }
 });
 
-// Fetch pending policies
+// /**
+//  * @swagger
+//  * /pendingPolicies:
+//  *   get:
+//  *     summary: Fetch pending policy purchases
+//  *     tags: [Policies]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of pending policy purchases.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *               items:
+//  *                 $ref: '#/components/schemas/PolicyPurchase'
+//  *       500:
+//  *         description: Failed to fetch pending policies.
+//  */
 router.get('/pendingPolicies', authMiddleware, async (req, res) => {
   try {
     const policies = await pool.query(
@@ -94,7 +411,26 @@ router.get('/pendingPolicies', authMiddleware, async (req, res) => {
   }
 });
 
-// Fetch pending claims
+// /**
+//  * @swagger
+//  * /pendingClaims:
+//  *   get:
+//  *     summary: Fetch pending claims
+//  *     tags: [Claims]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     responses:
+//  *       200:
+//  *         description: A list of pending claims.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: array
+//  *               items:
+//  *                 $ref: '#/components/schemas/Claim'
+//  *       500:
+//  *         description: Failed to fetch pending claims.
+//  */
 router.get('/pendingClaims', authMiddleware, async (req, res) => {
   try {
     const claims = await pool.query(
@@ -111,7 +447,54 @@ router.get('/pendingClaims', authMiddleware, async (req, res) => {
   }
 });
 
-// Approve/Reject Claim
+// /**
+//  * @swagger
+//  * /approveClaim/{claimId}:
+//  *   post:
+//  *     summary: Approve or reject a claim (admin only)
+//  *     tags: [Claims]
+//  *     security:
+//  *       - bearerAuth: []
+//  *     parameters:
+//  *       - in: path
+//  *         name: claimId
+//  *         schema:
+//  *           type: integer
+//  *         required: true
+//  *         description: The ID of the claim.
+//  *     requestBody:
+//  *       description: Payload containing the decision and optional rejection reason.
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               decision:
+//  *                 type: boolean
+//  *                 description: Set to true to approve, false to reject.
+//  *               rejection_reason:
+//  *                 type: string
+//  *                 description: Optional reason for rejection.
+//  *             required:
+//  *               - decision
+//  *     responses:
+//  *       200:
+//  *         description: Claim status updated.
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 success:
+//  *                   type: boolean
+//  *                 message:
+//  *                   type: string
+//  *       403:
+//  *         description: Forbidden – Admin privileges required.
+//  *       500:
+//  *         description: Failed to process claim decision.
+//  */
 router.post('/approveClaim/:claimId', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { claimId } = req.params;
@@ -151,7 +534,6 @@ router.post('/approveClaim/:claimId', authMiddleware, adminOnly, async (req, res
     }
 
     res.json({ success: true, message: `Claim ${newStatus}` });
-
   } catch (error) {
     console.error('Claim approval error:', error);
     res.status(500).json({ error: 'Failed to process claim decision' });
